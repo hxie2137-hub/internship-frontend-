@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>我的第一个网页</title>
+</head>
+<body>
+  <h1>在韩留学生二手交易平台</h1>
+
+  <div class="login-row">
+    <input id="username" placeholder="请输入用户名">
+    <button onclick="login()">登录</button>
+    <button onclick="logout()">退出登录</button>
+    <span id="currentUserText">当前未登录</span>
+  </div>
+
+<div class="form-row">
+  <input id="name" placeholder="请输入商品名">
+  <input id="price" placeholder="请输入价格">
+  <input id="description" placeholder="请输入商品描述">
+  <input id="contact" placeholder="请输入联系方式">
+  <select id="category">
+    <option value="生活用品">生活用品</option>
+    <option value="电子产品">电子产品</option>
+    <option value="书籍资料">书籍资料</option>
+    <option value="衣服鞋包">衣服鞋包</option>
+    <option value="其他">其他</option>
+  </select>
+  <button onclick="addItem()">发布</button>
+
+</div>
+
+<div class="toolbar">
+  <input id="search" placeholder="搜索商品">
+  <button onclick="searchItems()">搜索</button>
+  <button onclick="showAllItems()">显示全部</button>
+  <button onclick="showMyItems()">只看我的发布</button>
+  <select id="filterCategory">
+    <option value="全部">全部分类</option>
+    <option value="生活用品">生活用品</option>
+    <option value="电子产品">电子产品</option>
+    <option value="书籍资料">书籍资料</option>
+    <option value="衣服鞋包">衣服鞋包</option>
+    <option value="其他">其他</option>
+  </select>
+  
+  <button onclick="filterByCategory()">筛选分类</button>
+  <select id="sortPrice" onchange="sortItems()">
+    <option value="默认">默认排序</option>
+    <option value="低到高">价格从低到高</option>
+    <option value="高到低">价格从高到低</option>
+  </select>
+  
+</div>
+  
+  
+  <ul id="list"></ul>
+
+  <script>
+    let currentUser = "";
+    let items = [];
+    let currentKeyword = "";
+    let currentCategory = "全部";
+    let showMineOnly = false;
+    let currentSort = "默认";
+
+    function saveItems() {
+      localStorage.setItem("items", JSON.stringify(items));
+    }
+
+    function loadItems() {
+      const savedItems = localStorage.getItem("items");
+
+      if (savedItems !== null) {
+        items = JSON.parse(savedItems);
+      }
+    }
+
+    function getProductText(product) {
+      return "[" + product.category + "] " + product.name + " " + product.price + " " + product.description + " " + product.contact + " " + product.owner + " " + product.status + " " + product.publishTime;
+    }
+
+    function getFilteredItems() {
+      let result = items.slice();
+
+      if (currentKeyword !== "") {
+        result = result.filter(function (product) {
+          return getProductText(product).includes(currentKeyword);
+        });
+      }
+
+      if (currentCategory !== "全部") {
+        result = result.filter(function (product) {
+          return product.category === currentCategory;
+        });
+      }
+
+      if (showMineOnly) {
+        result = result.filter(function (product) {
+          return product.owner === currentUser;
+        });
+      }
+
+      if (currentSort === "低到高") {
+        result.sort(function (a, b) {
+          return Number(a.price) - Number(b.price);
+        });
+      } else if (currentSort === "高到低") {
+        result.sort(function (a, b) {
+          return Number(b.price) - Number(a.price);
+        });
+      }
+
+      return result;
+    }
+
+    function renderItems() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      const visibleItems = getFilteredItems();
+
+      for (let i = 0; i < visibleItems.length; i++) {
+        const product = visibleItems[i];
+        const item = document.createElement("li");
+        item.className = "product-card";
+
+        if (product.status === "已售出") {
+          item.className = "product-card sold-out";
+        }
+
+        const content = document.createElement("div");
+        content.className = "product-content";
+
+        const titleRow = document.createElement("div");
+        titleRow.className = "product-title-row";
+
+        const title = document.createElement("strong");
+        title.innerText = product.name;
+
+        const status = document.createElement("span");
+        status.className = "status-badge";
+        status.innerText = product.status;
+
+        titleRow.appendChild(title);
+        titleRow.appendChild(status);
+
+        const priceText = document.createElement("p");
+        priceText.innerText = "价格：₩" + product.price;
+
+        const categoryText = document.createElement("p");
+        categoryText.innerText = "分类：" + product.category;
+
+        const descriptionText = document.createElement("p");
+        descriptionText.innerText = "描述：" + product.description;
+
+        const contactText = document.createElement("p");
+        contactText.innerText = "联系方式：" + product.contact;
+
+        const metaText = document.createElement("p");
+        metaText.className = "product-meta";
+        metaText.innerText = "发布者：" + product.owner + " · 发布时间：" + product.publishTime;
+
+        content.appendChild(titleRow);
+        content.appendChild(priceText);
+        content.appendChild(categoryText);
+        content.appendChild(descriptionText);
+        content.appendChild(contactText);
+        content.appendChild(metaText);
+
+        const actions = document.createElement("div");
+        actions.className = "product-actions";
+
+        const soldButton = document.createElement("button");
+        soldButton.innerText = product.status === "已售出" ? "已售出" : "标记已售出";
+
+        const deleteButton = document.createElement("button");
+        deleteButton.innerText = "删除";
+
+        soldButton.onclick = function () {
+          if (currentUser !== product.owner) {
+            alert("只能修改自己发布的商品");
+            return;
+          }
+
+          if (product.status === "已售出") {
+            return;
+          }
+
+          product.status = "已售出";
+          saveItems();
+          renderItems();
+        };
+
+        deleteButton.onclick = function () {
+          if (currentUser !== product.owner) {
+            alert("只能删除自己发布的商品");
+            return;
+          }
+
+          const index = items.indexOf(product);
+          items.splice(index, 1);
+          saveItems();
+          renderItems();
+        };
+
+        actions.appendChild(soldButton);
+        actions.appendChild(deleteButton);
+
+        item.appendChild(content);
+        item.appendChild(actions);
+        list.appendChild(item);
+      }
+    }
+
+    function login() {
+      const username = document.getElementById("username").value;
+
+      if (username === "") {
+        alert("请输入用户名");
+        return;
+      }
+
+      currentUser = username;
+      document.getElementById("currentUserText").innerText = "当前用户：" + currentUser;
+      document.getElementById("username").value = "";
+    }
+
+    function logout() {
+      currentUser = "";
+      showMineOnly = false;
+      document.getElementById("currentUserText").innerText = "当前未登录";
+      renderItems();
+    }
+
+    function addItem() {
+      if (currentUser === "") {
+        alert("请先登录再发布商品");
+        return;
+      }
+
+      const name = document.getElementById("name").value;
+      const price = document.getElementById("price").value;
+      const description = document.getElementById("description").value;
+      const contact = document.getElementById("contact").value;
+      const category = document.getElementById("category").value;
+      const now = new Date();
+      const publishTime = now.toLocaleString();
+
+      if (name === "" || price === "" || description === "" || contact === "") {
+        alert("请把商品信息填写完整");
+        return;
+      }
+
+      const product = {
+        name: name,
+        price: price,
+        description: description,
+        contact: contact,
+        category: category,
+        owner: currentUser,
+        status: "在售",
+        publishTime: publishTime
+      };
+
+      items.push(product);
+      saveItems();
+      renderItems();
+
+      document.getElementById("name").value = "";
+      document.getElementById("price").value = "";
+      document.getElementById("description").value = "";
+      document.getElementById("contact").value = "";
+    }
+
+    function searchItems() {
+      currentKeyword = document.getElementById("search").value;
+      renderItems();
+    }
+
+    function showAllItems() {
+      currentKeyword = "";
+      currentCategory = "全部";
+      showMineOnly = false;
+      currentSort = "默认";
+      document.getElementById("search").value = "";
+      document.getElementById("filterCategory").value = "全部";
+      document.getElementById("sortPrice").value = "默认";
+      renderItems();
+    }
+
+    function filterByCategory() {
+      currentCategory = document.getElementById("filterCategory").value;
+      renderItems();
+    }
+
+    function showMyItems() {
+      if (currentUser === "") {
+        alert("请先登录再查看自己的发布");
+        return;
+      }
+
+      showMineOnly = true;
+      renderItems();
+    }
+
+    function sortItems() {
+      currentSort = document.getElementById("sortPrice").value;
+      renderItems();
+    }
+
+    loadItems();
+    renderItems();
+  </script>
+</body>
+</html>

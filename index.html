@@ -3,10 +3,11 @@
 <head>
   <link rel="stylesheet" href="style.css">
   <meta charset="UTF-8">
-  <title>我的第一个网页</title>
+  <title>在韩留学生二手交易平台</title>
 </head>
 <body>
   <h1>在韩留学生二手交易平台</h1>
+  <p class="subtitle">面向在韩留学生的闲置发布、筛选和交易管理小工具</p>
 
   <div class="login-row">
     <input id="username" placeholder="请输入用户名">
@@ -17,9 +18,10 @@
 
 <div class="form-row">
   <input id="name" placeholder="请输入商品名">
-  <input id="price" placeholder="请输入价格">
+  <input id="price" type="number" min="1" placeholder="请输入价格">
   <input id="description" placeholder="请输入商品描述">
   <input id="contact" placeholder="请输入联系方式">
+  <input id="imageUrl" placeholder="图片链接（可选）">
   <select id="category">
     <option value="生活用品">生活用品</option>
     <option value="电子产品">电子产品</option>
@@ -51,10 +53,33 @@
     <option value="低到高">价格从低到高</option>
     <option value="高到低">价格从高到低</option>
   </select>
+  <select id="filterStatus" onchange="filterByStatus()">
+    <option value="全部">全部状态</option>
+    <option value="在售">只看在售</option>
+    <option value="已售出">只看已售出</option>
+  </select>
   
 </div>
   
-  
+  <div class="stats-row">
+    <div class="stat-card">
+      <span>全部商品</span>
+      <strong id="totalCount">0</strong>
+    </div>
+    <div class="stat-card">
+      <span>在售商品</span>
+      <strong id="activeCount">0</strong>
+    </div>
+    <div class="stat-card">
+      <span>已售出</span>
+      <strong id="soldCount">0</strong>
+    </div>
+    <div class="stat-card">
+      <span>我的发布</span>
+      <strong id="myCount">0</strong>
+    </div>
+  </div>
+
   <ul id="list"></ul>
 
   <script>
@@ -64,6 +89,7 @@
     let currentCategory = "全部";
     let showMineOnly = false;
     let currentSort = "默认";
+    let currentStatus = "全部";
 
     function saveItems() {
       localStorage.setItem("items", JSON.stringify(items));
@@ -75,10 +101,29 @@
       if (savedItems !== null) {
         items = JSON.parse(savedItems);
       }
+
+      for (let i = 0; i < items.length; i++) {
+        if (!items[i].status) {
+          items[i].status = "在售";
+        }
+      }
     }
 
     function getProductText(product) {
       return "[" + product.category + "] " + product.name + " " + product.price + " " + product.description + " " + product.contact + " " + product.owner + " " + product.status + " " + product.publishTime;
+    }
+
+    function formatPrice(price) {
+      return Number(price).toLocaleString();
+    }
+
+    function copyContact(contact) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(contact);
+        alert("联系方式已复制");
+      } else {
+        prompt("请复制联系方式", contact);
+      }
     }
 
     function getFilteredItems() {
@@ -86,7 +131,7 @@
 
       if (currentKeyword !== "") {
         result = result.filter(function (product) {
-          return getProductText(product).includes(currentKeyword);
+          return getProductText(product).toLowerCase().includes(currentKeyword.toLowerCase());
         });
       }
 
@@ -99,6 +144,12 @@
       if (showMineOnly) {
         result = result.filter(function (product) {
           return product.owner === currentUser;
+        });
+      }
+
+      if (currentStatus !== "全部") {
+        result = result.filter(function (product) {
+          return product.status === currentStatus;
         });
       }
 
@@ -115,10 +166,38 @@
       return result;
     }
 
+    function updateStats() {
+      const totalCount = items.length;
+      const activeCount = items.filter(function (product) {
+        return product.status === "在售";
+      }).length;
+      const soldCount = items.filter(function (product) {
+        return product.status === "已售出";
+      }).length;
+      const myCount = currentUser === "" ? 0 : items.filter(function (product) {
+        return product.owner === currentUser;
+      }).length;
+
+      document.getElementById("totalCount").innerText = totalCount;
+      document.getElementById("activeCount").innerText = activeCount;
+      document.getElementById("soldCount").innerText = soldCount;
+      document.getElementById("myCount").innerText = myCount;
+    }
+
     function renderItems() {
       const list = document.getElementById("list");
       list.innerHTML = "";
       const visibleItems = getFilteredItems();
+
+      updateStats();
+
+      if (visibleItems.length === 0) {
+        const emptyItem = document.createElement("li");
+        emptyItem.className = "empty-state";
+        emptyItem.innerText = "暂无符合条件的商品";
+        list.appendChild(emptyItem);
+        return;
+      }
 
       for (let i = 0; i < visibleItems.length; i++) {
         const product = visibleItems[i];
@@ -131,6 +210,18 @@
 
         const content = document.createElement("div");
         content.className = "product-content";
+
+        const imageWrap = document.createElement("div");
+        imageWrap.className = "product-image";
+
+        if (product.imageUrl) {
+          const image = document.createElement("img");
+          image.src = product.imageUrl;
+          image.alt = product.name;
+          imageWrap.appendChild(image);
+        } else {
+          imageWrap.innerText = product.category;
+        }
 
         const titleRow = document.createElement("div");
         titleRow.className = "product-title-row";
@@ -146,7 +237,8 @@
         titleRow.appendChild(status);
 
         const priceText = document.createElement("p");
-        priceText.innerText = "价格：₩" + product.price;
+        priceText.className = "product-price";
+        priceText.innerText = "价格：₩" + formatPrice(product.price);
 
         const categoryText = document.createElement("p");
         categoryText.innerText = "分类：" + product.category;
@@ -173,8 +265,18 @@
 
         const soldButton = document.createElement("button");
         soldButton.innerText = product.status === "已售出" ? "已售出" : "标记已售出";
+        soldButton.disabled = product.status === "已售出";
+
+        const editButton = document.createElement("button");
+        editButton.className = "secondary-button";
+        editButton.innerText = "编辑";
+
+        const copyButton = document.createElement("button");
+        copyButton.className = "secondary-button";
+        copyButton.innerText = "复制联系方式";
 
         const deleteButton = document.createElement("button");
+        deleteButton.className = "danger-button";
         deleteButton.innerText = "删除";
 
         soldButton.onclick = function () {
@@ -192,9 +294,52 @@
           renderItems();
         };
 
+        copyButton.onclick = function () {
+          copyContact(product.contact);
+        };
+
+        editButton.onclick = function () {
+          if (currentUser !== product.owner) {
+            alert("只能编辑自己发布的商品");
+            return;
+          }
+
+          const newName = prompt("请输入新的商品名", product.name);
+          const newPrice = prompt("请输入新的价格", product.price);
+          const newDescription = prompt("请输入新的商品描述", product.description);
+          const newContact = prompt("请输入新的联系方式", product.contact);
+          const newImageUrl = prompt("请输入新的图片链接（可选）", product.imageUrl || "");
+
+          if (newName === null || newPrice === null || newDescription === null || newContact === null || newImageUrl === null) {
+            return;
+          }
+
+          if (newName === "" || newPrice === "" || newDescription === "" || newContact === "") {
+            alert("商品信息不能为空");
+            return;
+          }
+
+          if (Number(newPrice) <= 0) {
+            alert("价格必须是大于 0 的数字");
+            return;
+          }
+
+          product.name = newName;
+          product.price = newPrice;
+          product.description = newDescription;
+          product.contact = newContact;
+          product.imageUrl = newImageUrl;
+          saveItems();
+          renderItems();
+        };
+
         deleteButton.onclick = function () {
           if (currentUser !== product.owner) {
             alert("只能删除自己发布的商品");
+            return;
+          }
+
+          if (!confirm("确定要删除这个商品吗？")) {
             return;
           }
 
@@ -205,8 +350,11 @@
         };
 
         actions.appendChild(soldButton);
+        actions.appendChild(copyButton);
+        actions.appendChild(editButton);
         actions.appendChild(deleteButton);
 
+        item.appendChild(imageWrap);
         item.appendChild(content);
         item.appendChild(actions);
         list.appendChild(item);
@@ -224,6 +372,7 @@
       currentUser = username;
       document.getElementById("currentUserText").innerText = "当前用户：" + currentUser;
       document.getElementById("username").value = "";
+      renderItems();
     }
 
     function logout() {
@@ -243,6 +392,7 @@
       const price = document.getElementById("price").value;
       const description = document.getElementById("description").value;
       const contact = document.getElementById("contact").value;
+      const imageUrl = document.getElementById("imageUrl").value;
       const category = document.getElementById("category").value;
       const now = new Date();
       const publishTime = now.toLocaleString();
@@ -252,12 +402,18 @@
         return;
       }
 
+      if (Number(price) <= 0) {
+        alert("价格必须是大于 0 的数字");
+        return;
+      }
+
       const product = {
         name: name,
         price: price,
         description: description,
         contact: contact,
         category: category,
+        imageUrl: imageUrl,
         owner: currentUser,
         status: "在售",
         publishTime: publishTime
@@ -271,6 +427,7 @@
       document.getElementById("price").value = "";
       document.getElementById("description").value = "";
       document.getElementById("contact").value = "";
+      document.getElementById("imageUrl").value = "";
     }
 
     function searchItems() {
@@ -283,9 +440,11 @@
       currentCategory = "全部";
       showMineOnly = false;
       currentSort = "默认";
+      currentStatus = "全部";
       document.getElementById("search").value = "";
       document.getElementById("filterCategory").value = "全部";
       document.getElementById("sortPrice").value = "默认";
+      document.getElementById("filterStatus").value = "全部";
       renderItems();
     }
 
@@ -306,6 +465,11 @@
 
     function sortItems() {
       currentSort = document.getElementById("sortPrice").value;
+      renderItems();
+    }
+
+    function filterByStatus() {
+      currentStatus = document.getElementById("filterStatus").value;
       renderItems();
     }
 
